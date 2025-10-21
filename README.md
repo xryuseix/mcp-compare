@@ -13,19 +13,30 @@ npm run build
 
 ```bash
 npm run stdio  # stdio
-npm run http   # http (port 3001)
-npm run sse    # sse (port 3002)
+npm run http   # streamable HTTP (port 3001)
+npm run sse    # SSE (port 3002)
 ```
 
 ## Test with MCP Inspector
 
+### stdio
 ```bash
 npx @modelcontextprotocol/inspector node dist/stdio-server.js
-npx @modelcontextprotocol/inspector node dist/http-server.js
-npx @modelcontextprotocol/inspector node dist/sse-server.js
 ```
 
-## Test with curl/stdio
+### HTTP
+```bash
+npx @modelcontextprotocol/inspector
+node dist/http-server.js
+```
+
+### SSE
+```bash
+npx @modelcontextprotocol/inspector
+node dist/sse-server.js
+```
+
+## Test with curl
 
 ```bash
 ./scripts/test-stdio.sh  # stdio server
@@ -35,4 +46,4 @@ npx @modelcontextprotocol/inspector node dist/sse-server.js
 
 ## Tool
 
-- `ping(name: string)` → `"pong {name}"`
+- `ping(name: string)` → `"pong ${name}"`

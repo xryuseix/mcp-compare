@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-  JSONRPCRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
-import { createServer } from "http";
+import { randomUUID } from "crypto";
 
 const app = express();
-const httpServer = createServer(app);
 const PORT = 3001;
 
 app.use(express.json());
@@ -63,17 +62,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   throw new Error(`Unknown tool: ${request.params.name}`);
 });
 
-// MCP over HTTP endpoint
-app.post("/mcp", async (req, res) => {
-  try {
-    const request = req.body as JSONRPCRequest;
-    const response = await server.request(request, CallToolRequestSchema);
-    res.json(response);
-  } catch (error) {
-    res.status(500).json({ error: String(error) });
-  }
-});
+async function main() {
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+  });
 
-httpServer.listen(PORT, () => {
-  console.log(`Ping MCP Server (HTTP) running on http://localhost:${PORT}/mcp`);
+  await server.connect(transport);
+
+  // Handle all requests at /mcp endpoint
+  app.all("/mcp", async (req, res) => {
+    await transport.handleRequest(req, res, req.body);
+  });
+
+  app.listen(PORT, () => {
+    console.log(`Ping MCP Server (Streamable HTTP) running on http://localhost:${PORT}/mcp`);
+  });
+}
+
+main().catch((error) => {
+  console.error("Fatal error:", error);
+  process.exit(1);
 });
