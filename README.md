@@ -36,12 +36,12 @@ npx @modelcontextprotocol/inspector
 node dist/sse-server.js
 ```
 
-## Test with curl
+## Test with node
 
 ```bash
-./scripts/test-stdio.sh  # stdio server
-./scripts/test-http.sh   # HTTP server
-./scripts/test-sse.sh    # SSE server
+yarn test:stdio  # stdio server
+yarn test:http   # HTTP server
+yarn test:sse    # SSE server
 ```
 
 ## Tool
