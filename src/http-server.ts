@@ -13,73 +13,91 @@ const PORT = 3001;
 
 app.use(express.json());
 
-const server = new Server(
-  {
-    name: "ping-server-http",
-    version: "1.0.0",
-  },
-  {
-    capabilities: {
-      tools: {},
+// Store server and transport pairs by session ID
+const sessions = new Map();
+
+function createServerAndTransport() {
+  const server = new Server(
+    {
+      name: "ping-server-http",
+      version: "1.0.0",
     },
-  }
-);
-
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: "ping",
-        description: "Returns 'pong {name}' for the given name",
-        inputSchema: {
-          type: "object",
-          properties: {
-            name: {
-              type: "string",
-              description: "The name to echo back in the pong response",
-            },
-          },
-          required: ["name"],
-        },
+    {
+      capabilities: {
+        tools: {},
       },
-    ],
-  };
-});
+    }
+  );
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "ping") {
-    const name = request.params.arguments?.name as string;
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
-      content: [
+      tools: [
         {
-          type: "text",
-          text: `pong ${name}`,
+          name: "ping",
+          description: "Returns 'pong {name}' for the given name",
+          inputSchema: {
+            type: "object",
+            properties: {
+              name: {
+                type: "string",
+                description: "The name to echo back in the pong response",
+              },
+            },
+            required: ["name"],
+          },
         },
       ],
     };
-  }
-  
-  throw new Error(`Unknown tool: ${request.params.name}`);
-});
+  });
 
-async function main() {
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === "ping") {
+      const name = request.params.arguments?.name as string;
+      return {
+        content: [
+          {
+            type: "text",
+            text: `pong ${name}`,
+          },
+        ],
+      };
+    }
+    
+    throw new Error(`Unknown tool: ${request.params.name}`);
+  });
+
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
+    onsessioninitialized: async (sessionId) => {
+      console.error(`New session initialized: ${sessionId}`);
+      // Store this session
+      sessions.set(sessionId, { server, transport });
+    },
+    onsessionclosed: async (sessionId) => {
+      console.error(`Session closed: ${sessionId}`);
+      sessions.delete(sessionId);
+    },
   });
 
-  await server.connect(transport);
-
-  // Handle all requests at /mcp endpoint
-  app.all("/mcp", async (req, res) => {
-    await transport.handleRequest(req, res, req.body);
-  });
-
-  app.listen(PORT, () => {
-    console.log(`Ping MCP Server (Streamable HTTP) running on http://localhost:${PORT}/mcp`);
-  });
+  return { server, transport };
 }
 
-main().catch((error) => {
-  console.error("Fatal error:", error);
-  process.exit(1);
+// Handle all requests at /mcp endpoint
+app.all("/mcp", async (req, res) => {
+  // Try to extract session ID from request
+  const sessionId = req.headers['mcp-session-id'] as string;
+  
+  let sessionData = sessionId ? sessions.get(sessionId) : null;
+  
+  if (!sessionData) {
+    // Create new session
+    sessionData = createServerAndTransport();
+    await sessionData.server.connect(sessionData.transport);
+  }
+  
+  await sessionData.transport.handleRequest(req, res, req.body);
+});
+
+app.listen(PORT, () => {
+  console.log(`Ping MCP Server (Streamable HTTP) running on http://localhost:${PORT}/mcp`);
 });
